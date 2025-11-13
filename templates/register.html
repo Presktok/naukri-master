@@ -1,0 +1,99 @@
+{% extends "base.html" %}
+
+{% block title %}Register - AI Job Portal{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-lg-8">
+        <div class="card shadow">
+            <div class="card-header bg-primary text-white">
+                <h4 class="mb-0"><i class="fas fa-user-plus me-2"></i>Job Seeker Registration</h4>
+            </div>
+            <div class="card-body">
+                <form method="POST">
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="username" class="form-label">Username *</label>
+                            <input type="text" class="form-control" id="username" name="username" required>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="email" class="form-label">Email *</label>
+                            <input type="email" class="form-control" id="email" name="email" required>
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="password" class="form-label">Password *</label>
+                            <input type="password" class="form-control" id="password" name="password" required>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="full_name" class="form-label">Full Name *</label>
+                            <input type="text" class="form-control" id="full_name" name="full_name" required>
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="phone" class="form-label">Phone Number *</label>
+                            <input type="tel" class="form-control" id="phone" name="phone" required>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="location" class="form-label">Location *</label>
+                            <input type="text" class="form-control" id="location" name="location" required>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="skills" class="form-label">Skills *</label>
+                        <textarea class="form-control" id="skills" name="skills" rows="3" 
+                                  placeholder="e.g., Python, JavaScript, React, Machine Learning, Data Analysis" required></textarea>
+                        <div class="form-text">List your skills separated by commas. This helps our AI find better job matches.</div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="experience" class="form-label">Experience Level *</label>
+                            <select class="form-select" id="experience" name="experience" required>
+                                <option value="">Select Experience</option>
+                                <option value="0-1 years">0-1 years (Fresher)</option>
+                                <option value="1-3 years">1-3 years</option>
+                                <option value="3-5 years">3-5 years</option>
+                                <option value="5-10 years">5-10 years</option>
+                                <option value="10+ years">10+ years</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="education" class="form-label">Education *</label>
+                            <select class="form-select" id="education" name="education" required>
+                                <option value="">Select Education</option>
+                                <option value="High School">High School</option>
+                                <option value="Diploma">Diploma</option>
+                                <option value="Bachelor's Degree">Bachelor's Degree</option>
+                                <option value="Master's Degree">Master's Degree</option>
+                                <option value="PhD">PhD</option>
+                                <option value="Other">Other</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="resume_summary" class="form-label">Resume Summary</label>
+                        <textarea class="form-control" id="resume_summary" name="resume_summary" rows="4" 
+                                  placeholder="Brief summary of your professional background, achievements, and career objectives..."></textarea>
+                    </div>
+                    
+                    <div class="d-grid">
+                        <button type="submit" class="btn btn-primary btn-lg">Register</button>
+                    </div>
+                </form>
+                
+                <div class="text-center mt-3">
+                    <p>Already have an account? <a href="{{ url_for('login') }}">Login here</a></p>
+                    <p>Are you an employer? <a href="{{ url_for('employer_login') }}">Employer Login</a></p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

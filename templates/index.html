@@ -1,0 +1,100 @@
+{% extends "base.html" %}
+
+{% block title %}AI Job Portal - Find Your Dream Job{% endblock %}
+
+{% block content %}
+<div class="hero-section bg-gradient-primary text-white py-5 mb-5 rounded">
+    <div class="container">
+        <div class="row align-items-center">
+            <div class="col-lg-6">
+                <h1 class="display-4 fw-bold mb-4">Find Your Dream Job with AI</h1>
+                <p class="lead mb-4">Our advanced AI system matches you with the perfect job opportunities based on your skills and experience.</p>
+                <div class="d-flex gap-3">
+                    <a href="{{ url_for('register') }}" class="btn btn-light btn-lg">Get Started</a>
+                    <a href="{{ url_for('jobs') }}" class="btn btn-outline-light btn-lg">Browse Jobs</a>
+                </div>
+            </div>
+            <div class="col-lg-6">
+                <div class="text-center">
+                    <i class="fas fa-robot display-1 opacity-75"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mb-5">
+    <div class="col-md-4 mb-4">
+        <div class="card h-100 shadow-sm">
+            <div class="card-body text-center">
+                <i class="fas fa-user-tie fa-3x text-primary mb-3"></i>
+                <h5 class="card-title">Job Seekers</h5>
+                <p class="card-text">Create your profile, upload your skills, and let our AI find the perfect job matches for you.</p>
+                <a href="{{ url_for('register') }}" class="btn btn-primary">Register Now</a>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4 mb-4">
+        <div class="card h-100 shadow-sm">
+            <div class="card-body text-center">
+                <i class="fas fa-building fa-3x text-success mb-3"></i>
+                <h5 class="card-title">Employers</h5>
+                <p class="card-text">Post your job openings and let our AI recommend the best candidates for your positions.</p>
+                <a href="{{ url_for('employer_login') }}" class="btn btn-success">Post Jobs</a>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4 mb-4">
+        <div class="card h-100 shadow-sm">
+            <div class="card-body text-center">
+                <i class="fas fa-brain fa-3x text-warning mb-3"></i>
+                <h5 class="card-title">AI Matching</h5>
+                <p class="card-text">Advanced machine learning algorithms match candidates with the most suitable job opportunities.</p>
+                <a href="{{ url_for('jobs') }}" class="btn btn-warning">Explore AI Features</a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-lg-8 mx-auto">
+        <div class="card">
+            <div class="card-header bg-primary text-white">
+                <h4 class="mb-0"><i class="fas fa-chart-line me-2"></i>How It Works</h4>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-3 text-center mb-3">
+                        <div class="bg-primary text-white rounded-circle d-inline-flex align-items-center justify-content-center" style="width: 60px; height: 60px;">
+                            <span class="fw-bold">1</span>
+                        </div>
+                        <h6 class="mt-2">Register</h6>
+                        <p class="small">Create your profile with skills and experience</p>
+                    </div>
+                    <div class="col-md-3 text-center mb-3">
+                        <div class="bg-primary text-white rounded-circle d-inline-flex align-items-center justify-content-center" style="width: 60px; height: 60px;">
+                            <span class="fw-bold">2</span>
+                        </div>
+                        <h6 class="mt-2">AI Analysis</h6>
+                        <p class="small">Our AI analyzes your profile and job requirements</p>
+                    </div>
+                    <div class="col-md-3 text-center mb-3">
+                        <div class="bg-primary text-white rounded-circle d-inline-flex align-items-center justify-content-center" style="width: 60px; height: 60px;">
+                            <span class="fw-bold">3</span>
+                        </div>
+                        <h6 class="mt-2">Get Matches</h6>
+                        <p class="small">Receive personalized job recommendations</p>
+                    </div>
+                    <div class="col-md-3 text-center mb-3">
+                        <div class="bg-primary text-white rounded-circle d-inline-flex align-items-center justify-content-center" style="width: 60px; height: 60px;">
+                            <span class="fw-bold">4</span>
+                        </div>
+                        <h6 class="mt-2">Apply</h6>
+                        <p class="small">Apply to jobs that match your profile</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

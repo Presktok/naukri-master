@@ -1,0 +1,173 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - AI Job Portal{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-lg-4 mb-4">
+        <div class="card">
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0"><i class="fas fa-user me-2"></i>Your Profile</h5>
+            </div>
+            <div class="card-body">
+                <h6>{{ user.full_name }}</h6>
+                <p class="text-muted mb-2">{{ user.email }}</p>
+                <p class="text-muted mb-2">{{ user.location }}</p>
+                <p class="text-muted mb-2">Experience: {{ user.experience }}</p>
+                <p class="text-muted mb-2">Education: {{ user.education }}</p>
+                <hr>
+                <h6>Skills:</h6>
+                <div class="skill-tags">
+                    {% for skill in user.skills.split(',') %}
+                        <span class="badge bg-secondary me-1 mb-1">{{ skill.strip() }}</span>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-lg-8">
+        <div class="card">
+            <div class="card-header bg-success text-white">
+                <h5 class="mb-0"><i class="fas fa-brain me-2"></i>AI Job Recommendations</h5>
+            </div>
+            <div class="card-body">
+                {% if recommendations %}
+                    <div class="alert alert-success">
+                        <i class="fas fa-magic me-2"></i>
+                        Our AI has found {{ recommendations|length }} job(s) that match your profile!
+                    </div>
+                    
+                    {% for rec in recommendations %}
+                        <div class="card mb-3 border-start border-success border-4">
+                            <div class="card-body">
+                                <div class="row">
+                                    <div class="col-md-8">
+                                        <h5 class="card-title">{{ rec.job.title }}</h5>
+                                        <h6 class="card-subtitle mb-2 text-muted">{{ rec.job.company }}</h6>
+                                        <p class="card-text">{{ rec.job.description[:200] }}...</p>
+                                        <div class="d-flex flex-wrap gap-2 mb-2">
+                                            <span class="badge {% if user.location.lower() == rec.job.location.lower() %}bg-success{% else %}bg-info{% endif %}">
+                                                <i class="fas fa-map-marker-alt me-1"></i>{{ rec.job.location }}
+                                                {% if user.location.lower() == rec.job.location.lower() %}<i class="fas fa-check ms-1"></i>{% endif %}
+                                            </span>
+                                            <span class="badge bg-warning">{{ rec.job.job_type }}</span>
+                                            <span class="badge bg-secondary">{{ rec.job.experience_required }}</span>
+                                            {% if rec.job.salary %}
+                                                <span class="badge bg-success">{{ rec.job.salary }}</span>
+                                            {% endif %}
+                                        </div>
+                                        <div class="mt-2">
+                                            <h6 class="mb-1">Required Skills:</h6>
+                                            <div class="skill-tags">
+                                                {% for skill in rec.job.required_skills.split(',') %}
+                                                    {% set skill_match = skill.strip().lower() in user.skills.lower() %}
+                                                    <span class="badge {% if skill_match %}bg-success{% else %}bg-secondary{% endif %} me-1 mb-1">
+                                                        {{ skill.strip() }}
+                                                        {% if skill_match %}<i class="fas fa-check ms-1"></i>{% endif %}
+                                                    </span>
+                                                {% endfor %}
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-4 text-end">
+                                        <div class="match-score mb-3">
+                                            <div class="display-6 text-success fw-bold">{{ rec.match_percentage }}%</div>
+                                            <small class="text-muted">Overall Match</small>
+                                        </div>
+                                        <div class="match-details mb-3">
+                                            <div class="d-flex justify-content-between align-items-center mb-1">
+                                                <small>Skills Match:</small>
+                                                <small class="text-success fw-bold">{{ rec.skill_match }}%</small>
+                                            </div>
+                                            <div class="progress" style="height: 5px;">
+                                                <div class="progress-bar bg-success" role="progressbar" style="width: {{ rec.skill_match }}%"></div>
+                                            </div>
+                                            
+                                            <div class="d-flex justify-content-between align-items-center mb-1 mt-2">
+                                                <small>Experience Match:</small>
+                                                <small class="text-success fw-bold">{{ rec.exp_match }}%</small>
+                                            </div>
+                                            <div class="progress" style="height: 5px;">
+                                                <div class="progress-bar bg-success" role="progressbar" style="width: {{ rec.exp_match }}%"></div>
+                                            </div>
+                                            
+                                            {% if rec.matching_skills %}
+                                            <div class="mt-2">
+                                                <small class="text-muted">Matching Skills:</small>
+                                                <div class="skill-tags mt-1">
+                                                    {% for skill in rec.matching_skills %}
+                                                        <span class="badge bg-success me-1 mb-1">
+                                                            {{ skill }} <i class="fas fa-check ms-1"></i>
+                                                        </span>
+                                                    {% endfor %}
+                                                </div>
+                                            </div>
+                                            {% endif %}
+                                        </div>
+                                        <button class="btn btn-primary btn-sm" onclick="showJobDetails({{ rec.job.id }})">
+                                            View Details
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    {% endfor %}
+                {% else %}
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle me-2"></i>
+                        No job recommendations available at the moment. Check back later or browse all jobs.
+                    </div>
+                {% endif %}
+                
+                <div class="text-center mt-3">
+                    <a href="{{ url_for('jobs') }}" class="btn btn-outline-primary">
+                        <i class="fas fa-search me-2"></i>Browse All Jobs
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Job Details Modal -->
+<div class="modal fade" id="jobDetailsModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Job Details</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="jobDetailsContent">
+                <!-- Job details will be loaded here -->
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                <button type="button" class="btn btn-primary" onclick="applyForJob()">Apply for Job</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function showJobDetails(jobId) {
+    // In a real application, you would fetch job details via AJAX
+    // For now, we'll show a placeholder
+    const content = `
+        <div class="alert alert-info">
+            <strong>Note:</strong> This is a demo. In a real application, detailed job information would be displayed here.
+        </div>
+        <p>Job ID: ${jobId}</p>
+        <p>To apply for this job, contact the employer directly using the contact information provided.</p>
+    `;
+    document.getElementById('jobDetailsContent').innerHTML = content;
+    new bootstrap.Modal(document.getElementById('jobDetailsModal')).show();
+}
+
+function applyForJob() {
+    alert('Application feature coming soon! Contact the employer directly for now.');
+}
+</script>
+{% endblock %}

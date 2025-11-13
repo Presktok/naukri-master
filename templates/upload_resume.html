@@ -1,0 +1,136 @@
+{% extends "base.html" %}
+
+{% block title %}Upload Resume - AI Job Portal{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-lg-9">
+        <div class="mb-4">
+            <h2 class="fw-bold mb-2">Resume Parser</h2>
+            <p class="text-muted">Upload a candidate's resume to get AI-powered job suggestions</p>
+        </div>
+        
+        <div class="card shadow-lg border-0">
+            <div class="card-header text-white">
+                <h4 class="mb-0"><i class="fas fa-file-upload me-2"></i>Upload Resume for Job Suggestions</h4>
+            </div>
+            <div class="card-body p-4">
+                <div class="alert alert-info border-0 shadow-sm mb-4">
+                    <div class="d-flex align-items-start">
+                        <i class="fas fa-info-circle me-3 mt-1 fs-5"></i>
+                        <div>
+                            <strong class="d-block mb-1">How it works:</strong>
+                            <p class="mb-0 small">Upload a candidate's resume (PDF or DOCX), and our AI will parse it to extract skills, experience, and education. Then we'll suggest matching jobs from your posted positions.</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <form method="POST" enctype="multipart/form-data" id="uploadForm">
+                    <div class="upload-area mb-4" id="uploadArea">
+                        <input type="file" class="d-none" id="resume" name="resume" accept=".pdf,.docx,.doc" required>
+                        <div class="py-5">
+                            <i class="fas fa-cloud-upload-alt fa-3x text-primary mb-3"></i>
+                            <h5 class="fw-bold mb-2">Drag & Drop or Click to Upload</h5>
+                            <p class="text-muted mb-3">Supported formats: PDF, DOCX, DOC</p>
+                            <p class="small text-muted">Maximum file size: 16MB</p>
+                            <button type="button" class="btn btn-primary mt-2" onclick="document.getElementById('resume').click()">
+                                <i class="fas fa-folder-open me-2"></i>Browse Files
+                            </button>
+                        </div>
+                        <div id="fileName" class="mt-3 fw-semibold text-primary" style="display: none;"></div>
+                    </div>
+                    
+                    <div class="d-grid gap-2 d-md-flex justify-content-md-end pt-3 border-top">
+                        <a href="{{ url_for('employer_dashboard') }}" class="btn btn-outline-secondary">
+                            <i class="fas fa-times me-1"></i>Cancel
+                        </a>
+                        <button type="submit" class="btn btn-lg">
+                            <i class="fas fa-upload me-2"></i>Upload & Parse Resume
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+        
+        <div class="row mt-4">
+            <div class="col-md-4 mb-3">
+                <div class="card border-0 shadow-sm h-100">
+                    <div class="card-body text-center">
+                        <div class="mb-3">
+                            <i class="fas fa-code fa-2x text-primary"></i>
+                        </div>
+                        <h6 class="fw-bold mb-2">Skills Extraction</h6>
+                        <p class="small text-muted mb-0">Technical skills, programming languages, tools, and technologies are automatically identified</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4 mb-3">
+                <div class="card border-0 shadow-sm h-100">
+                    <div class="card-body text-center">
+                        <div class="mb-3">
+                            <i class="fas fa-briefcase fa-2x text-success"></i>
+                        </div>
+                        <h6 class="fw-bold mb-2">Experience Analysis</h6>
+                        <p class="small text-muted mb-0">Years of professional experience are extracted and matched with job requirements</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4 mb-3">
+                <div class="card border-0 shadow-sm h-100">
+                    <div class="card-body text-center">
+                        <div class="mb-3">
+                            <i class="fas fa-graduation-cap fa-2x text-info"></i>
+                        </div>
+                        <h6 class="fw-bold mb-2">Education Details</h6>
+                        <p class="small text-muted mb-0">Educational background and qualifications are parsed for comprehensive matching</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.getElementById('resume').addEventListener('change', function(e) {
+    const fileName = e.target.files[0]?.name;
+    const fileNameDiv = document.getElementById('fileName');
+    if (fileName) {
+        fileNameDiv.textContent = 'Selected: ' + fileName;
+        fileNameDiv.style.display = 'block';
+        document.getElementById('uploadArea').classList.add('border-primary');
+    }
+});
+
+const uploadArea = document.getElementById('uploadArea');
+['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+    uploadArea.addEventListener(eventName, preventDefaults, false);
+});
+
+function preventDefaults(e) {
+    e.preventDefault();
+    e.stopPropagation();
+}
+
+['dragenter', 'dragover'].forEach(eventName => {
+    uploadArea.addEventListener(eventName, () => uploadArea.classList.add('dragover'), false);
+});
+
+['dragleave', 'drop'].forEach(eventName => {
+    uploadArea.addEventListener(eventName, () => uploadArea.classList.remove('dragover'), false);
+});
+
+uploadArea.addEventListener('drop', handleDrop, false);
+
+function handleDrop(e) {
+    const dt = e.dataTransfer;
+    const files = dt.files;
+    document.getElementById('resume').files = files;
+    const fileNameDiv = document.getElementById('fileName');
+    if (files[0]) {
+        fileNameDiv.textContent = 'Selected: ' + files[0].name;
+        fileNameDiv.style.display = 'block';
+    }
+}
+</script>
+{% endblock %}
+

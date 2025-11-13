@@ -1,0 +1,181 @@
+{% extends "base.html" %}
+
+{% block title %}Job Suggestions - AI Job Portal{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-lg-4 mb-4">
+        <div class="card shadow-lg border-0 sticky-top" style="top: 20px;">
+            <div class="card-header text-white">
+                <h5 class="mb-0"><i class="fas fa-user-circle me-2"></i>Parsed Resume Information</h5>
+            </div>
+            <div class="card-body">
+                <div class="mb-4">
+                    <h6 class="text-uppercase text-muted small fw-bold mb-3">
+                        <i class="fas fa-code me-2 text-primary"></i>Skills Extracted
+                    </h6>
+                    {% if parsed_data.skills %}
+                        <div class="skill-tags">
+                            {% for skill in parsed_data.skills.split(',') %}
+                                <span class="badge bg-primary">{{ skill.strip() }}</span>
+                            {% endfor %}
+                        </div>
+                    {% else %}
+                        <p class="text-muted small mb-0">No skills detected</p>
+                    {% endif %}
+                </div>
+                
+                <div class="mb-4">
+                    <h6 class="text-uppercase text-muted small fw-bold mb-3">
+                        <i class="fas fa-briefcase me-2 text-success"></i>Experience Level
+                    </h6>
+                    <p class="mb-3">
+                        <span class="badge bg-success fs-6 px-3 py-2">{{ parsed_data.experience }}</span>
+                    </p>
+                    
+                    {% if parsed_data.detailed_experience and parsed_data.detailed_experience|length > 0 %}
+                        <h6 class="text-uppercase text-muted small fw-bold mb-3 mt-4">
+                            <i class="fas fa-history me-2 text-info"></i>Work History
+                        </h6>
+                        <div class="experience-list">
+                            {% for exp in parsed_data.detailed_experience %}
+                                <div class="mb-3 pb-3 {% if not loop.last %}border-bottom{% endif %}">
+                                    <h6 class="fw-bold mb-1 small">{{ exp.job_title }}</h6>
+                                    <p class="mb-1 small text-muted">
+                                        <i class="fas fa-building me-1"></i>{{ exp.company }}
+                                    </p>
+                                    <p class="mb-1 small text-muted">
+                                        <i class="fas fa-calendar me-1"></i>{{ exp.date_range }}
+                                    </p>
+                                    {% if exp.description and exp.description != 'No description available' %}
+                                        <p class="mb-0 small text-muted mt-2" style="font-size: 0.75rem;">
+                                            {{ exp.description[:100] }}{% if exp.description|length > 100 %}...{% endif %}
+                                        </p>
+                                    {% endif %}
+                                </div>
+                            {% endfor %}
+                        </div>
+                    {% else %}
+                        <p class="small text-muted mb-0">No detailed work history found</p>
+                    {% endif %}
+                </div>
+                
+                <div class="mb-4">
+                    <h6 class="text-uppercase text-muted small fw-bold mb-3">
+                        <i class="fas fa-graduation-cap me-2 text-info"></i>Education
+                    </h6>
+                    <p class="mb-0 small text-muted">{{ parsed_data.education }}</p>
+                </div>
+                
+                <hr class="my-4">
+                <div class="d-grid">
+                    <a href="{{ url_for('upload_resume') }}" class="btn btn-outline-primary">
+                        <i class="fas fa-upload me-2"></i>Upload Another Resume
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-lg-8">
+        <div class="card shadow-lg border-0">
+            <div class="card-header text-white d-flex justify-content-between align-items-center">
+                <h5 class="mb-0"><i class="fas fa-brain me-2"></i>AI Job Suggestions</h5>
+                <a href="{{ url_for('employer_dashboard') }}" class="btn btn-light btn-sm">
+                    <i class="fas fa-arrow-left me-1"></i>Back to Dashboard
+                </a>
+            </div>
+            <div class="card-body p-4">
+                {% if recommendations %}
+                    <div class="alert alert-success border-0 shadow-sm mb-4">
+                        <div class="d-flex align-items-center">
+                            <i class="fas fa-magic me-3 fs-4"></i>
+                            <div>
+                                <strong>Great match!</strong> Found <strong>{{ recommendations|length }}</strong> job(s) that match this resume profile.
+                            </div>
+                        </div>
+                    </div>
+                    
+                    {% for rec in recommendations %}
+                        <div class="job-match-card mb-4">
+                            <div class="row g-4">
+                                <div class="col-md-8">
+                                    <div class="d-flex align-items-start mb-3">
+                                        <div class="flex-grow-1">
+                                            <h4 class="fw-bold mb-2">{{ rec.job.title }}</h4>
+                                            <h6 class="text-muted mb-3">
+                                                <i class="fas fa-building me-2 text-primary"></i>{{ rec.job.company }}
+                                            </h6>
+                                            <p class="text-muted mb-3">{{ rec.job.description[:200] }}...</p>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="d-flex flex-wrap gap-2 mb-3">
+                                        <span class="badge bg-info px-3 py-2">
+                                            <i class="fas fa-map-marker-alt me-1"></i>{{ rec.job.location }}
+                                        </span>
+                                        <span class="badge bg-warning px-3 py-2">{{ rec.job.job_type }}</span>
+                                        <span class="badge bg-secondary px-3 py-2">{{ rec.job.experience_required }}</span>
+                                        {% if rec.job.salary %}
+                                            <span class="badge bg-success px-3 py-2">
+                                                <i class="fas fa-dollar-sign me-1"></i>{{ rec.job.salary }}
+                                            </span>
+                                        {% endif %}
+                                    </div>
+                                    
+                                    <div class="mt-3">
+                                        <h6 class="fw-bold mb-2 small text-uppercase text-muted">Required Skills:</h6>
+                                        <div class="skill-tags">
+                                            {% for skill in rec.job.required_skills.split(',') %}
+                                                {% set skill_trimmed = skill.strip() %}
+                                                {% set skill_found = skill_trimmed.lower() in parsed_data.skills.lower() %}
+                                                <span class="badge {% if skill_found %}bg-success{% else %}bg-secondary{% endif %} px-3 py-2">
+                                                    {{ skill_trimmed }}
+                                                    {% if skill_found %}<i class="fas fa-check ms-2"></i>{% endif %}
+                                                </span>
+                                            {% endfor %}
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="text-center mb-4">
+                                        <div class="match-badge mb-3">
+                                            {{ rec.match_percentage }}%
+                                        </div>
+                                        <p class="small text-muted mb-0 fw-semibold">Match Score</p>
+                                    </div>
+                                    <div class="d-grid gap-2">
+                                        <a href="{{ url_for('view_job', job_id=rec.job.id) }}" class="btn btn-primary">
+                                            <i class="fas fa-eye me-2"></i>View Details
+                                        </a>
+                                        {% if rec.job.posted_by == employer_name %}
+                                            <a href="{{ url_for('edit_job', job_id=rec.job.id) }}" class="btn btn-outline-success">
+                                                <i class="fas fa-edit me-2"></i>Edit Job
+                                            </a>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    {% endfor %}
+                {% else %}
+                    <div class="text-center py-5">
+                        <i class="fas fa-search fa-3x text-muted mb-4"></i>
+                        <h5 class="fw-bold mb-3">No Matching Jobs Found</h5>
+                        <p class="text-muted mb-4">We couldn't find any jobs that match this resume profile.</p>
+                        <div class="d-flex gap-2 justify-content-center">
+                            <a href="{{ url_for('post_job') }}" class="btn btn-primary">
+                                <i class="fas fa-plus me-2"></i>Post a New Job
+                            </a>
+                            <a href="{{ url_for('upload_resume') }}" class="btn btn-outline-primary">
+                                <i class="fas fa-upload me-2"></i>Try Another Resume
+                            </a>
+                        </div>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+

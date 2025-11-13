@@ -1,0 +1,97 @@
+{% extends "base.html" %}
+
+{% block title %}Post Job - AI Job Portal{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-lg-8">
+        <div class="card shadow">
+            <div class="card-header bg-success text-white">
+                <h4 class="mb-0"><i class="fas fa-plus me-2"></i>Post a New Job</h4>
+            </div>
+            <div class="card-body">
+                <form method="POST">
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="title" class="form-label">Job Title *</label>
+                            <input type="text" class="form-control" id="title" name="title" 
+                                   placeholder="e.g., Senior Python Developer" required>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="company" class="form-label">Company Name *</label>
+                            <input type="text" class="form-control" id="company" name="company" 
+                                   placeholder="e.g., TechCorp Inc." required>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="description" class="form-label">Job Description *</label>
+                        <textarea class="form-control" id="description" name="description" rows="6" 
+                                  placeholder="Provide a detailed description of the role, responsibilities, and what the candidate will be doing..." required></textarea>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="required_skills" class="form-label">Required Skills *</label>
+                        <textarea class="form-control" id="required_skills" name="required_skills" rows="3" 
+                                  placeholder="e.g., Python, Django, PostgreSQL, AWS, Machine Learning" required></textarea>
+                        <div class="form-text">List required skills separated by commas. Our AI uses this to match candidates.</div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-4 mb-3">
+                            <label for="experience_required" class="form-label">Experience Required *</label>
+                            <select class="form-select" id="experience_required" name="experience_required" required>
+                                <option value="">Select Experience</option>
+                                <option value="0-1 years">0-1 years (Entry Level)</option>
+                                <option value="1-3 years">1-3 years (Junior)</option>
+                                <option value="3-5 years">3-5 years (Mid Level)</option>
+                                <option value="5-10 years">5-10 years (Senior)</option>
+                                <option value="10+ years">10+ years (Lead/Principal)</option>
+                            </select>
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label for="location" class="form-label">Location *</label>
+                            <input type="text" class="form-control" id="location" name="location" 
+                                   placeholder="e.g., New York, NY" required>
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label for="job_type" class="form-label">Job Type *</label>
+                            <select class="form-select" id="job_type" name="job_type" required>
+                                <option value="">Select Type</option>
+                                <option value="Full-time">Full-time</option>
+                                <option value="Part-time">Part-time</option>
+                                <option value="Contract">Contract</option>
+                                <option value="Internship">Internship</option>
+                                <option value="Remote">Remote</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="salary" class="form-label">Salary Range</label>
+                        <input type="text" class="form-control" id="salary" name="salary" 
+                               placeholder="e.g., $80,000 - $120,000">
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="contact_email" class="form-label">Contact Email *</label>
+                        <input type="email" class="form-control" id="contact_email" name="contact_email" 
+                               placeholder="hr@company.com" required>
+                        <div class="form-text">Candidates will use this email to apply for the job.</div>
+                    </div>
+                    
+                    <div class="d-grid">
+                        <button type="submit" class="btn btn-success btn-lg">Post Job</button>
+                    </div>
+                </form>
+                
+                <div class="text-center mt-3">
+                    <a href="{{ url_for('employer_dashboard') }}" class="btn btn-outline-secondary">
+                        <i class="fas fa-arrow-left me-2"></i>Back to Dashboard
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
