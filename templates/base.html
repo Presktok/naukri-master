@@ -25,9 +25,6 @@
                     <li class="nav-item">
                         <a class="nav-link" href="{{ url_for('index') }}">Home</a>
                     </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="{{ url_for('jobs') }}">Jobs</a>
-                    </li>
                     {% if session.user_id %}
                     <li class="nav-item">
                         <a class="nav-link" href="{{ url_for('dashboard') }}">Dashboard</a>
@@ -35,9 +32,9 @@
                     <li class="nav-item">
                         <a class="nav-link" href="{{ url_for('logout') }}">Logout</a>
                     </li>
-                    {% elif session.employer_name %}
+                    {% elif session.recruiter_name %}
                     <li class="nav-item">
-                        <a class="nav-link" href="{{ url_for('employer_dashboard') }}">Dashboard</a>
+                        <a class="nav-link" href="{{ url_for('recruiter_dashboard') }}">Dashboard</a>
                     </li>
                     <li class="nav-item">
                         <a class="nav-link" href="{{ url_for('logout') }}">Logout</a>
@@ -50,7 +47,7 @@
                         <a class="nav-link" href="{{ url_for('register') }}">Register</a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="{{ url_for('employer_login') }}">Employer Login</a>
+                        <a class="nav-link" href="{{ url_for('recruiter_login') }}">Recruiter Login</a>
                     </li>
                     {% endif %}
                 </ul>

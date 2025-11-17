@@ -5,7 +5,7 @@
 {% block content %}
 <div class="row">
     <div class="col-lg-4 mb-4">
-        <div class="card">
+        <div class="card mb-4">
             <div class="card-header bg-primary text-white">
                 <h5 class="mb-0"><i class="fas fa-user me-2"></i>Your Profile</h5>
             </div>
@@ -16,12 +16,103 @@
                 <p class="text-muted mb-2">Experience: {{ user.experience }}</p>
                 <p class="text-muted mb-2">Education: {{ user.education }}</p>
                 <hr>
-                <h6>Skills:</h6>
+                <h6>Your Skills:</h6>
                 <div class="skill-tags">
                     {% for skill in user.skills.split(',') %}
-                        <span class="badge bg-secondary me-1 mb-1">{{ skill.strip() }}</span>
+                        {% set skill_stripped = skill.strip() %}
+                        {% set skill_matched = False %}
+                        {% if all_matched_skills %}
+                            {% for matched_skill in all_matched_skills %}
+                                {% if skill_stripped.lower() == matched_skill.lower() %}
+                                    {% set skill_matched = True %}
+                                {% endif %}
+                            {% endfor %}
+                        {% endif %}
+                        <span class="badge {% if skill_matched %}bg-success{% else %}bg-secondary{% endif %} me-1 mb-1">
+                            {% if skill_matched %}<i class="fas fa-check-circle me-1"></i>{% endif %}{{ skill_stripped }}
+                        </span>
                     {% endfor %}
                 </div>
+                {% if all_matched_skills %}
+                <small class="text-muted d-block mt-2">
+                    <i class="fas fa-info-circle me-1"></i>Green badges show skills that match job requirements
+                </small>
+                {% endif %}
+            </div>
+        </div>
+        
+        <div class="card">
+            <div class="card-header bg-info text-white d-flex justify-content-between align-items-center">
+                <h5 class="mb-0"><i class="fas fa-file-alt me-2"></i>Resume</h5>
+                {% if user.resume_path %}
+                <form method="POST" action="{{ url_for('remove_resume') }}" style="display: inline;" onsubmit="return confirm('Are you sure you want to remove your resume?');">
+                    <button type="submit" class="btn btn-sm btn-danger">
+                        <i class="fas fa-times me-1"></i>Remove
+                    </button>
+                </form>
+                {% endif %}
+            </div>
+            <div class="card-body">
+                {% if user.resume_path %}
+                    <div class="alert alert-success">
+                        <i class="fas fa-check-circle me-2"></i>
+                        <strong>Resume Uploaded</strong>
+                        {% if user.resume_uploaded_at %}
+                            <br><small class="text-muted">Uploaded: {{ user.resume_uploaded_at|format_date }}</small>
+                        {% endif %}
+                    </div>
+                    <div class="d-grid gap-2 mb-3">
+                        <a href="{{ url_for('download_resume') }}" class="btn btn-primary btn-sm">
+                            <i class="fas fa-download me-2"></i>Download Resume
+                        </a>
+                    </div>
+                    
+                    {% if resume_skills_list %}
+                    <div class="mb-3">
+                        <h6 class="text-info">
+                            <i class="fas fa-magic me-2"></i>Skills Extracted from Resume ({{ resume_skills_list|length }}):
+                        </h6>
+                        <div class="skill-tags mt-2">
+                            {% for skill in resume_skills_list %}
+                                {% set skill_matched = False %}
+                                {% if all_matched_skills %}
+                                    {% for matched_skill in all_matched_skills %}
+                                        {% if skill.lower() == matched_skill.lower() %}
+                                            {% set skill_matched = True %}
+                                        {% endif %}
+                                    {% endfor %}
+                                {% endif %}
+                                <span class="badge {% if skill_matched %}bg-success{% else %}bg-info{% endif %} me-1 mb-1">
+                                    {% if skill_matched %}<i class="fas fa-check-circle me-1"></i>{% endif %}{{ skill }}
+                                </span>
+                            {% endfor %}
+                        </div>
+                        <small class="text-muted d-block mt-2">
+                            <i class="fas fa-info-circle me-1"></i>Green badges indicate skills that match job requirements
+                        </small>
+                    </div>
+                    {% endif %}
+                {% else %}
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle me-2"></i>
+                        <strong>No Resume Uploaded</strong>
+                        <br><small>Your profile skills and experience are being used for job matching. You can upload a resume to add more skills.</small>
+                    </div>
+                {% endif %}
+                
+                <hr>
+                <h6>Upload/Update Resume</h6>
+                <form method="POST" action="{{ url_for('upload_user_resume') }}" enctype="multipart/form-data">
+                    <div class="mb-3">
+                        <input type="file" class="form-control" id="resume" name="resume" accept=".pdf,.docx,.doc" required>
+                        <div class="form-text">Supported formats: PDF, DOCX, DOC. Max size: 16MB.</div>
+                    </div>
+                    <div class="d-grid">
+                        <button type="submit" class="btn btn-info btn-sm">
+                            <i class="fas fa-upload me-2"></i>{% if user.resume_path %}Update{% else %}Upload{% endif %} Resume
+                        </button>
+                    </div>
+                </form>
             </div>
         </div>
     </div>
@@ -38,9 +129,32 @@
                         Our AI has found {{ recommendations|length }} job(s) that match your profile!
                     </div>
                     
+                    {% if all_matched_skills %}
+                    <div class="alert alert-success mb-4">
+                        <h6 class="mb-2">
+                            <i class="fas fa-star me-2"></i>Your Matched Skills ({{ all_matched_skills|length }}):
+                        </h6>
+                        <div class="skill-tags">
+                            {% for skill in all_matched_skills %}
+                                <span class="badge bg-success me-1 mb-1">
+                                    <i class="fas fa-check-circle me-1"></i>{{ skill|title }}
+                                </span>
+                            {% endfor %}
+                        </div>
+                        <small class="text-muted d-block mt-2">
+                            <i class="fas fa-info-circle me-1"></i>These skills match requirements in {{ recommendations|length }} recommended job(s)
+                        </small>
+                    </div>
+                    {% endif %}
+                    
                     {% for rec in recommendations %}
-                        <div class="card mb-3 border-start border-success border-4">
+                        <div class="card mb-3 border-start {% if rec.both_matched %}border-warning border-5{% else %}border-success border-4{% endif %}">
                             <div class="card-body">
+                                {% if rec.both_matched %}
+                                <div class="alert alert-warning mb-3">
+                                    <i class="fas fa-star me-2"></i><strong>Top Priority Match!</strong> Both your skills and experience match this job well.
+                                </div>
+                                {% endif %}
                                 <div class="row">
                                     <div class="col-md-8">
                                         <h5 class="card-title">{{ rec.job.title }}</h5>
@@ -58,15 +172,39 @@
                                             {% endif %}
                                         </div>
                                         <div class="mt-2">
-                                            <h6 class="mb-1">Required Skills:</h6>
-                                            <div class="skill-tags">
-                                                {% for skill in rec.job.required_skills.split(',') %}
-                                                    {% set skill_match = skill.strip().lower() in user.skills.lower() %}
-                                                    <span class="badge {% if skill_match %}bg-success{% else %}bg-secondary{% endif %} me-1 mb-1">
-                                                        {{ skill.strip() }}
-                                                        {% if skill_match %}<i class="fas fa-check ms-1"></i>{% endif %}
-                                                    </span>
-                                                {% endfor %}
+                                            {% if rec.matching_skills %}
+                                            <div class="mb-2">
+                                                <h6 class="mb-1 text-success">
+                                                    <i class="fas fa-check-circle me-1"></i>Your Matched Skills ({{ rec.matching_skills|length }}):
+                                                </h6>
+                                                <div class="skill-tags">
+                                                    {% for skill in rec.matching_skills %}
+                                                        <span class="badge bg-success me-1 mb-1">
+                                                            <i class="fas fa-check me-1"></i>{{ skill|title }}
+                                                        </span>
+                                                    {% endfor %}
+                                                </div>
+                                            </div>
+                                            {% endif %}
+                                            <div>
+                                                <h6 class="mb-1">All Required Skills:</h6>
+                                                <div class="skill-tags">
+                                                    {% for skill in rec.job.required_skills.split(',') %}
+                                                        {% set skill_stripped = skill.strip() %}
+                                                        {% set skill_match = False %}
+                                                        {% if rec.matching_skills %}
+                                                            {% for matched_skill in rec.matching_skills %}
+                                                                {% if skill_stripped.lower() == matched_skill.lower() %}
+                                                                    {% set skill_match = True %}
+                                                                {% endif %}
+                                                            {% endfor %}
+                                                        {% endif %}
+                                                        <span class="badge {% if skill_match %}bg-success{% else %}bg-secondary{% endif %} me-1 mb-1">
+                                                            {{ skill_stripped }}
+                                                            {% if skill_match %}<i class="fas fa-check ms-1"></i>{% endif %}
+                                                        </span>
+                                                    {% endfor %}
+                                                </div>
                                             </div>
                                         </div>
                                     </div>
@@ -93,12 +231,12 @@
                                             </div>
                                             
                                             {% if rec.matching_skills %}
-                                            <div class="mt-2">
-                                                <small class="text-muted">Matching Skills:</small>
-                                                <div class="skill-tags mt-1">
+                                            <div class="mt-3 p-2 bg-light rounded">
+                                                <small class="text-muted d-block mb-1"><strong>Matched Skills:</strong></small>
+                                                <div class="skill-tags">
                                                     {% for skill in rec.matching_skills %}
                                                         <span class="badge bg-success me-1 mb-1">
-                                                            {{ skill }} <i class="fas fa-check ms-1"></i>
+                                                            <i class="fas fa-check me-1"></i>{{ skill|title }}
                                                         </span>
                                                     {% endfor %}
                                                 </div>
@@ -106,7 +244,10 @@
                                             {% endif %}
                                         </div>
                                         <button class="btn btn-primary btn-sm" onclick="showJobDetails({{ rec.job.id }})">
-                                            View Details
+                                            <i class="fas fa-eye me-1"></i>View Details
+                                        </button>
+                                        <button class="btn btn-success btn-sm mt-2" onclick="applyForJobDirect({{ rec.job.id }})">
+                                            <i class="fas fa-paper-plane me-1"></i>Apply Now
                                         </button>
                                     </div>
                                 </div>
@@ -143,7 +284,9 @@
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
-                <button type="button" class="btn btn-primary" onclick="applyForJob()">Apply for Job</button>
+                <button type="button" class="btn btn-primary" id="applyJobBtn" onclick="applyForJob()">
+                    <i class="fas fa-paper-plane me-1"></i>Apply for Job
+                </button>
             </div>
         </div>
     </div>
@@ -152,22 +295,154 @@
 
 {% block scripts %}
 <script>
+let currentJobId = null;
+
 function showJobDetails(jobId) {
-    // In a real application, you would fetch job details via AJAX
-    // For now, we'll show a placeholder
-    const content = `
-        <div class="alert alert-info">
-            <strong>Note:</strong> This is a demo. In a real application, detailed job information would be displayed here.
-        </div>
-        <p>Job ID: ${jobId}</p>
-        <p>To apply for this job, contact the employer directly using the contact information provided.</p>
-    `;
-    document.getElementById('jobDetailsContent').innerHTML = content;
-    new bootstrap.Modal(document.getElementById('jobDetailsModal')).show();
+    currentJobId = jobId;
+    const modal = new bootstrap.Modal(document.getElementById('jobDetailsModal'));
+    const contentDiv = document.getElementById('jobDetailsContent');
+    const applyBtn = document.getElementById('applyJobBtn');
+    
+    // Show loading state
+    contentDiv.innerHTML = '<div class="text-center"><div class="spinner-border" role="status"><span class="visually-hidden">Loading...</span></div></div>';
+    applyBtn.disabled = true;
+    modal.show();
+    
+    // Fetch job details
+    fetch(`/api/job/${jobId}`)
+        .then(response => response.json())
+        .then(job => {
+            // Check if user already applied
+            return fetch(`/api/check_application/${jobId}`)
+                .then(response => response.json())
+                .then(data => {
+                    const alreadyApplied = data.applied;
+                    
+                    const content = `
+                        <div class="mb-3">
+                            <h4 class="text-primary">${job.title}</h4>
+                            <h5 class="text-muted">${job.company}</h5>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <h6><i class="fas fa-info-circle me-2"></i>Job Description</h6>
+                            <p class="text-muted">${job.description}</p>
+                        </div>
+                        
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <h6><i class="fas fa-map-marker-alt me-2"></i>Location</h6>
+                                <p class="text-muted">${job.location}</p>
+                            </div>
+                            <div class="col-md-6">
+                                <h6><i class="fas fa-briefcase me-2"></i>Job Type</h6>
+                                <p class="text-muted">${job.job_type}</p>
+                            </div>
+                        </div>
+                        
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <h6><i class="fas fa-user-tie me-2"></i>Experience Required</h6>
+                                <p class="text-muted">${job.experience_required}</p>
+                            </div>
+                            <div class="col-md-6">
+                                <h6><i class="fas fa-dollar-sign me-2"></i>Salary</h6>
+                                <p class="text-muted">${job.salary || 'Not specified'}</p>
+                            </div>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <h6><i class="fas fa-tools me-2"></i>Required Skills</h6>
+                            <div class="skill-tags">
+                                ${job.required_skills.split(',').map(skill => 
+                                    `<span class="badge bg-primary me-1 mb-1">${skill.trim()}</span>`
+                                ).join('')}
+                            </div>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <h6><i class="fas fa-envelope me-2"></i>Contact Email</h6>
+                            <p class="text-muted"><a href="mailto:${job.contact_email}">${job.contact_email}</a></p>
+                        </div>
+                        
+                        ${alreadyApplied ? '<div class="alert alert-info"><i class="fas fa-check-circle me-2"></i>You have already applied for this job.</div>' : ''}
+                    `;
+                    
+                    contentDiv.innerHTML = content;
+                    applyBtn.disabled = alreadyApplied;
+                    if (alreadyApplied) {
+                        applyBtn.innerHTML = '<i class="fas fa-check me-1"></i>Already Applied';
+                        applyBtn.classList.remove('btn-primary');
+                        applyBtn.classList.add('btn-success');
+                    }
+                });
+        })
+        .catch(error => {
+            contentDiv.innerHTML = '<div class="alert alert-danger">Error loading job details. Please try again.</div>';
+            console.error('Error:', error);
+        });
 }
 
 function applyForJob() {
-    alert('Application feature coming soon! Contact the employer directly for now.');
+    if (!currentJobId) {
+        alert('No job selected');
+        return;
+    }
+    
+    const applyBtn = document.getElementById('applyJobBtn');
+    const originalText = applyBtn.innerHTML;
+    applyBtn.disabled = true;
+    applyBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Applying...';
+    
+    fetch(`/apply_job/${currentJobId}`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            // Close modal and reload page to show updated status
+            bootstrap.Modal.getInstance(document.getElementById('jobDetailsModal')).hide();
+            location.reload();
+        } else {
+            alert(data.message || 'Error applying for job');
+            applyBtn.disabled = false;
+            applyBtn.innerHTML = originalText;
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('Error applying for job. Please try again.');
+        applyBtn.disabled = false;
+        applyBtn.innerHTML = originalText;
+    });
+}
+
+function applyForJobDirect(jobId) {
+    if (confirm('Are you sure you want to apply for this job?')) {
+        currentJobId = jobId;
+        fetch(`/apply_job/${jobId}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                alert('Application submitted successfully!');
+                location.reload();
+            } else {
+                alert(data.message || 'Error applying for job');
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('Error applying for job. Please try again.');
+        });
+    }
 }
 </script>
 {% endblock %}

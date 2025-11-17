@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, jsonify, redirect, url_for, session, flash
+from flask import Flask, render_template, request, jsonify, redirect, url_for, session, flash, send_file
 import sqlite3
 from flask_cors import CORS
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -80,9 +80,24 @@ def init_db():
             location TEXT NOT NULL,
             phone TEXT NOT NULL,
             resume_summary TEXT,
+            resume_path TEXT,
+            resume_uploaded_at TEXT,
             created_at TEXT
         )'''
     )
+    # Ensure new columns exist when upgrading older databases
+    try:
+        cols = [row[1] for row in cur.execute('PRAGMA table_info(user)').fetchall()]
+        if 'resume_path' not in cols:
+            cur.execute('ALTER TABLE user ADD COLUMN resume_path TEXT')
+        if 'resume_uploaded_at' not in cols:
+            cur.execute('ALTER TABLE user ADD COLUMN resume_uploaded_at TEXT')
+        if 'resume_skills' not in cols:
+            cur.execute('ALTER TABLE user ADD COLUMN resume_skills TEXT')
+        conn.commit()
+    except Exception:
+        # If PRAGMA fails for any reason, proceed without interrupting init
+        pass
     # Jobs
     cur.execute(
         '''CREATE TABLE IF NOT EXISTS job (
@@ -150,33 +165,126 @@ class JobRecommendationEngine:
         self.job_vectors = self.vectorizer.fit_transform(job_texts)
     
     def get_recommendations(self, user_skills, user_experience, top_n=5):
-        """Get job recommendations for a user based on their skills"""
-        if self.job_vectors is None:
-            self.update_job_vectors()
+        """Get job recommendations for a user based on their skills.
+        Adds skill_match, exp_match, and matching_skills for UI breakdown.
+        """
+        # Always update job vectors to ensure latest jobs are included
+        self.update_job_vectors()
             
         if self.job_vectors is None or len(self.jobs_data) == 0:
             return []
         
-        # Preprocess user skills
+        # Preprocess user skills for vector similarity
         user_profile = self.preprocess_text(user_skills)
-        user_vector = self.vectorizer.transform([user_profile])
+        
+        # Check if vectorizer has been fitted
+        if not hasattr(self.vectorizer, 'vocabulary_') or len(self.vectorizer.vocabulary_) == 0:
+            self.update_job_vectors()
+        
+        try:
+            user_vector = self.vectorizer.transform([user_profile])
+        except ValueError:
+            # If transform fails (vocabulary mismatch), refit
+            self.update_job_vectors()
+            user_vector = self.vectorizer.transform([user_profile])
         
         # Calculate similarity scores
         similarity_scores = cosine_similarity(user_vector, self.job_vectors).flatten()
         
-        # Get top recommendations
-        top_indices = similarity_scores.argsort()[-top_n:][::-1]
+        # Normalize candidate skills list (from profile or resume)
+        candidate_skills = [s.strip().lower() for s in (user_skills or '').split(',') if s.strip()]
+        
+        # Check ALL jobs, not just top N, to ensure we don't miss any matches
         recommendations = []
-        for idx in top_indices:
-            if similarity_scores[idx] > 0.1:
-                job_dict = self.jobs_data[idx]
+        # Helper for experience buckets
+        exp_levels = {
+            '0-1 years': 0,
+            '1-3 years': 1,
+            '3-5 years': 2,
+            '5-10 years': 3,
+            '10+ years': 4
+        }
+
+        # Process ALL jobs to find matches
+        for idx in range(len(self.jobs_data)):
+            job_dict = self.jobs_data[idx]
+            # Compute skill match first to check if there's any match
+            required = [s.strip().lower() for s in (job_dict.get('required_skills') or '').split(',') if s.strip()]
+            has_skill_match = bool(set(required) & set(candidate_skills)) if required and candidate_skills else False
+            
+            # Also check for partial matches (e.g., "javascript" matches "js" or vice versa)
+            has_partial_match = False
+            if required and candidate_skills:
+                for req_skill in required:
+                    for cand_skill in candidate_skills:
+                        # Check if one skill contains the other (for partial matches)
+                        if req_skill in cand_skill or cand_skill in req_skill:
+                            has_partial_match = True
+                            break
+                    if has_partial_match:
+                        break
+            
+            # Include job if:
+            # 1. Similarity > 0.001 (very low threshold)
+            # 2. There's at least one exact matching skill
+            # 3. There's a partial skill match
+            # 4. OR if there are 20 or fewer jobs total, show all jobs to ensure visibility
+            # This ensures newly posted jobs always appear
+            show_all_jobs = len(self.jobs_data) <= 20
+            if similarity_scores[idx] > 0.001 or has_skill_match or has_partial_match or show_all_jobs:
+                # Compute skill match percentage based on required skills vs candidate skills
+                if required:
+                    matched = sorted(list(set(required) & set(candidate_skills)))
+                    skill_match = round((len(matched) / len(required)) * 100, 1)
+                else:
+                    matched = []
+                    skill_match = 0.0
+
+                # Compute experience match (bucket distance)
+                req_idx = exp_levels.get(job_dict.get('experience_required', '').strip(), None)
+                user_idx = exp_levels.get((user_experience or '').strip(), None)
+                if req_idx is not None and user_idx is not None:
+                    diff = abs(req_idx - user_idx)
+                    exp_match = max(0, 100 - diff * 25)  # 0,25,50,75,100
+                else:
+                    exp_match = 0
+
+                # Calculate combined priority score
+                # Higher priority for jobs where BOTH skills and experience match well
+                # Formula: (skill_match * 0.6 + exp_match * 0.4) * bonus_multiplier
+                # Bonus multiplier: 1.5x if both are >= 70%, 1.3x if both are >= 50%, 1.1x if both are >= 30%
+                base_score = (skill_match * 0.6 + exp_match * 0.4)
+                
+                if skill_match >= 70 and exp_match >= 70:
+                    priority_multiplier = 1.5  # Excellent match in both
+                elif skill_match >= 50 and exp_match >= 50:
+                    priority_multiplier = 1.3  # Good match in both
+                elif skill_match >= 30 and exp_match >= 30:
+                    priority_multiplier = 1.1  # Decent match in both
+                else:
+                    priority_multiplier = 1.0  # No bonus
+                
+                priority_score = base_score * priority_multiplier
+                
+                # Also consider the original similarity score (weighted 30%)
+                combined_score = (priority_score * 0.7) + (float(similarity_scores[idx]) * 100 * 0.3)
+
                 recommendations.append({
                     'job': job_dict,
                     'similarity_score': float(similarity_scores[idx]),
-                    'match_percentage': round(float(similarity_scores[idx]) * 100, 1)
+                    'match_percentage': round(float(similarity_scores[idx]) * 100, 1),
+                    'skill_match': skill_match,
+                    'exp_match': exp_match,
+                    'matching_skills': matched,
+                    'priority_score': round(combined_score, 2),
+                    'both_matched': skill_match >= 50 and exp_match >= 50  # Flag for jobs with good match in both
                 })
         
-        return recommendations
+        # Sort by priority score (highest first) - jobs with both skills and experience match will rank higher
+        recommendations.sort(key=lambda x: x['priority_score'], reverse=True)
+        
+        # Return top N recommendations after sorting (but include all if less than top_n)
+        return recommendations[:top_n] if len(recommendations) > top_n else recommendations
 
 # Initialize recommendation engine
 recommendation_engine = JobRecommendationEngine()
@@ -521,8 +629,24 @@ def register():
             conn.close()
             flash('Email already registered!')
             return render_template('register.html')
+        # Handle optional resume upload
+        resume_path = None
+        resume_uploaded_at = None
+        if 'resume' in request.files:
+            file = request.files['resume']
+            if file and file.filename:
+                allowed_extensions = {'pdf', 'docx', 'doc'}
+                file_ext = file.filename.rsplit('.', 1)[1].lower() if '.' in file.filename else ''
+                if file_ext in allowed_extensions:
+                    filename = secure_filename(file.filename)
+                    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S_')
+                    filename = timestamp + filename
+                    # Store relative path under uploads
+                    file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
+                    resume_path = os.path.join('uploads', filename)
+                    resume_uploaded_at = datetime.utcnow().isoformat()
         cur.execute(
-            'INSERT INTO user (username, email, password_hash, full_name, skills, experience, education, location, phone, resume_summary, created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)',
+            'INSERT INTO user (username, email, password_hash, full_name, skills, experience, education, location, phone, resume_summary, resume_path, resume_uploaded_at, created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)',
             (
                 data['username'],
                 data['email'],
@@ -534,6 +658,8 @@ def register():
                 data['location'],
                 data['phone'],
                 data.get('resume_summary', ''),
+                resume_path,
+                resume_uploaded_at,
                 datetime.utcnow().isoformat()
             )
         )
@@ -551,29 +677,31 @@ def login():
         data = request.form
         conn = get_db()
         row = conn.execute('SELECT * FROM user WHERE username = ?', (data['username'],)).fetchone()
-        conn.close()
+        # If credentials valid
         if row and check_password_hash(row['password_hash'], data['password']):
+            conn.close()
             session['user_id'] = row['id']
             session['username'] = row['username']
             session['user_type'] = 'job_seeker'
             flash('Login successful!')
             return redirect(url_for('dashboard'))
         else:
+            conn.close()
             flash('Invalid username or password!')
     
     return render_template('login.html')
 
-@app.route('/employer_login', methods=['GET', 'POST'])
-def employer_login():
+@app.route('/recruiter_login', methods=['GET', 'POST'])
+def recruiter_login():
     if request.method == 'POST':
-        # Simple employer authentication (in production, use proper auth)
-        employer_name = request.form['employer_name']
-        session['employer_name'] = employer_name
-        session['user_type'] = 'employer'
-        flash('Employer login successful!')
-        return redirect(url_for('employer_dashboard'))
+        # Simple recruiter authentication (in production, use proper auth)
+        recruiter_name = request.form['recruiter_name']
+        session['recruiter_name'] = recruiter_name
+        session['user_type'] = 'recruiter'
+        flash('Recruiter login successful!')
+        return redirect(url_for('recruiter_dashboard'))
     
-    return render_template('employer_login.html')
+    return render_template('recruiter_login.html')
 
 @app.route('/dashboard')
 def dashboard():
@@ -586,48 +714,138 @@ def dashboard():
         flash('User not found')
         return redirect(url_for('login'))
     user = dict(user_row)
+    
+    # Combine profile skills and resume-extracted skills for better matching
+    profile_skills = user.get('skills', '') or ''
+    resume_skills = user.get('resume_skills', '') or ''
+    
+    # Merge skills (remove duplicates, case-insensitive)
+    all_user_skills = set()
+    if profile_skills:
+        all_user_skills.update([s.strip().lower() for s in profile_skills.split(',') if s.strip()])
+    if resume_skills:
+        all_user_skills.update([s.strip().lower() for s in resume_skills.split(',') if s.strip()])
+    combined_skills = ', '.join(sorted([s.title() for s in all_user_skills]))
+    
+    # Use combined skills for recommendations (get more to allow better prioritization)
     recommendations = recommendation_engine.get_recommendations(
-        user['skills'], user['experience']
+        combined_skills, user['experience'], top_n=10
     )
     
-    return render_template('dashboard.html', user=user, recommendations=recommendations)
+    # Collect all unique matched skills across all recommendations
+    all_matched_skills = set()
+    for rec in recommendations:
+        if rec.get('matching_skills'):
+            for skill in rec['matching_skills']:
+                all_matched_skills.add(skill.lower())
+    all_matched_skills = sorted([s.title() for s in all_matched_skills])
+    
+    # Separate resume skills for display
+    resume_skills_list = []
+    if resume_skills:
+        resume_skills_list = [s.strip().title() for s in resume_skills.split(',') if s.strip()]
+    
+    return render_template('dashboard.html', user=user, recommendations=recommendations, 
+                         all_matched_skills=all_matched_skills, resume_skills_list=resume_skills_list)
 
-@app.route('/employer_dashboard')
-def employer_dashboard():
-    if 'employer_name' not in session:
-        return redirect(url_for('employer_login'))
+def calculate_applicant_match(job_dict, user_dict):
+    """Calculate skill match and experience match for an applicant against a job"""
+    # Experience levels mapping
+    exp_levels = {
+        '0-1 years': 0,
+        '1-3 years': 1,
+        '3-5 years': 2,
+        '5-10 years': 3,
+        '10+ years': 4
+    }
+    
+    # Get required skills from job
+    required_skills = [s.strip().lower() for s in (job_dict.get('required_skills') or '').split(',') if s.strip()]
+    
+    # Get candidate skills (combine profile and resume skills)
+    profile_skills = [s.strip().lower() for s in (user_dict.get('skills') or '').split(',') if s.strip()]
+    resume_skills = [s.strip().lower() for s in (user_dict.get('resume_skills') or '').split(',') if s.strip()]
+    candidate_skills = list(set(profile_skills + resume_skills))
+    
+    # Calculate skill match
+    if required_skills:
+        matched_skills = sorted(list(set(required_skills) & set(candidate_skills)))
+        skill_match = round((len(matched_skills) / len(required_skills)) * 100, 1)
+    else:
+        matched_skills = []
+        skill_match = 0.0
+    
+    # Calculate experience match
+    req_exp = job_dict.get('experience_required', '').strip()
+    user_exp = user_dict.get('experience', '').strip()
+    
+    req_idx = exp_levels.get(req_exp, None)
+    user_idx = exp_levels.get(user_exp, None)
+    
+    if req_idx is not None and user_idx is not None:
+        diff = abs(req_idx - user_idx)
+        exp_match = max(0, 100 - diff * 25)  # 0, 25, 50, 75, 100
+    else:
+        exp_match = 0
+    
+    return {
+        'skill_match': skill_match,
+        'exp_match': exp_match,
+        'matched_skills': matched_skills,
+        'overall_match': round((skill_match * 0.7 + exp_match * 0.3), 1)  # Weighted average
+    }
+
+@app.route('/recruiter_dashboard')
+def recruiter_dashboard():
+    if 'recruiter_name' not in session:
+        return redirect(url_for('recruiter_login'))
     conn = get_db()
-    job_rows = conn.execute('SELECT * FROM job WHERE posted_by = ? ORDER BY datetime(created_at) DESC', (session['employer_name'],)).fetchall()
+    job_rows = conn.execute('SELECT * FROM job WHERE posted_by = ? ORDER BY datetime(created_at) DESC', (session['recruiter_name'],)).fetchall()
     jobs_with_applications = []
     for job_row in job_rows:
         job_dict = dict(job_row)
-        app_rows = conn.execute('SELECT a.*, u.full_name, u.email, u.skills FROM application a JOIN user u ON a.user_id = u.id WHERE a.job_id = ? ORDER BY datetime(a.applied_at) DESC', (job_dict['id'],)).fetchall()
+        app_rows = conn.execute('SELECT a.*, u.full_name, u.email, u.skills, u.resume_skills, u.resume_path, u.experience FROM application a JOIN user u ON a.user_id = u.id WHERE a.job_id = ? ORDER BY datetime(a.applied_at) DESC', (job_dict['id'],)).fetchall()
         applications = []
         for a in app_rows:
+            # Convert Row to dict for easier handling
+            app_dict = dict(a)
+            user_dict = {
+                'full_name': app_dict['full_name'],
+                'email': app_dict['email'],
+                'skills': app_dict['skills'],
+                'resume_skills': app_dict.get('resume_skills'),
+                'resume_path': app_dict.get('resume_path'),
+                'experience': app_dict.get('experience'),
+            }
+            
+            # Calculate match scores
+            match_scores = calculate_applicant_match(job_dict, user_dict)
+            
             applications.append({
-                'id': a['id'],
-                'user_id': a['user_id'],
-                'job_id': a['job_id'],
-                'applied_at': a['applied_at'],
-                'status': a['status'],
-                'user': {
-                    'full_name': a['full_name'],
-                    'email': a['email'],
-                    'skills': a['skills'],
-                }
+                'id': app_dict['id'],
+                'user_id': app_dict['user_id'],
+                'job_id': app_dict['job_id'],
+                'applied_at': app_dict['applied_at'],
+                'status': app_dict['status'],
+                'user': user_dict,
+                'match_scores': match_scores
             })
+        
+        # Sort applications by overall match (best matches first)
+        applications.sort(key=lambda x: x['match_scores']['overall_match'], reverse=True)
+        
         jobs_with_applications.append({
             'job': job_dict,
             'applications': applications,
             'application_count': len(applications)
         })
     conn.close()
-    return render_template('employer_dashboard.html', jobs_with_applications=jobs_with_applications, employer_name=session['employer_name'])
+    return render_template('recruiter_dashboard.html', jobs_with_applications=jobs_with_applications, recruiter_name=session['recruiter_name'])
 
 @app.route('/post_job', methods=['GET', 'POST'])
 def post_job():
-    if 'employer_name' not in session:
-        return redirect(url_for('employer_login'))
+    if 'recruiter_name' not in session:
+        return redirect(url_for('recruiter_login'))
     
     if request.method == 'POST':
         data = request.form
@@ -643,7 +861,7 @@ def post_job():
                 data['location'],
                 data.get('salary', ''),
                 data['job_type'],
-                session['employer_name'],
+                session['recruiter_name'],
                 data['contact_email'],
                 datetime.utcnow().isoformat()
             )
@@ -655,7 +873,7 @@ def post_job():
         recommendation_engine.update_job_vectors()
         
         flash('Job posted successfully!')
-        return redirect(url_for('employer_dashboard'))
+        return redirect(url_for('recruiter_dashboard'))
     
     return render_template('post_job.html')
 
@@ -673,25 +891,33 @@ def view_job(job_id):
     row = conn.execute('SELECT * FROM job WHERE id = ?', (job_id,)).fetchone()
     conn.close()
     if not row:
+        if 'recruiter_name' in session:
+            flash('Job not found!')
+            return redirect(url_for('recruiter_dashboard'))
         return redirect(url_for('jobs'))
-    return render_template('view_job.html', job=dict(row))
+    
+    job = dict(row)
+    # Check if user is the job owner (recruiter)
+    is_owner = 'recruiter_name' in session and job.get('posted_by') == session.get('recruiter_name')
+    
+    return render_template('view_job.html', job=job, is_owner=is_owner)
 
 @app.route('/edit_job/<int:job_id>', methods=['GET', 'POST'])
 def edit_job(job_id):
-    if 'employer_name' not in session:
-        return redirect(url_for('employer_login'))
+    if 'recruiter_name' not in session:
+        return redirect(url_for('recruiter_login'))
     conn = get_db()
     job_row = conn.execute('SELECT * FROM job WHERE id = ?', (job_id,)).fetchone()
     if not job_row:
         conn.close()
         flash('Job not found!')
-        return redirect(url_for('employer_dashboard'))
+        return redirect(url_for('recruiter_dashboard'))
     job = dict(job_row)
     # Check ownership
-    if job['posted_by'] != session['employer_name']:
+    if job['posted_by'] != session['recruiter_name']:
         conn.close()
         flash('You can only edit your own jobs!')
-        return redirect(url_for('employer_dashboard'))
+        return redirect(url_for('recruiter_dashboard'))
     
     if request.method == 'POST':
         data = request.form
@@ -709,25 +935,25 @@ def edit_job(job_id):
         recommendation_engine.update_job_vectors()
         
         flash('Job updated successfully!')
-        return redirect(url_for('employer_dashboard'))
+        return redirect(url_for('recruiter_dashboard'))
     
     conn.close()
     return render_template('edit_job.html', job=job)
 
 @app.route('/delete_job/<int:job_id>', methods=['POST'])
 def delete_job(job_id):
-    if 'employer_name' not in session:
-        return redirect(url_for('employer_login'))
+    if 'recruiter_name' not in session:
+        return redirect(url_for('recruiter_login'))
     conn = get_db()
     row = conn.execute('SELECT posted_by FROM job WHERE id = ?', (job_id,)).fetchone()
     if not row:
         conn.close()
         flash('Job not found!')
-        return redirect(url_for('employer_dashboard'))
-    if row['posted_by'] != session['employer_name']:
+        return redirect(url_for('recruiter_dashboard'))
+    if row['posted_by'] != session['recruiter_name']:
         conn.close()
         flash('You can only delete your own jobs!')
-        return redirect(url_for('employer_dashboard'))
+        return redirect(url_for('recruiter_dashboard'))
     # Delete dependent applications then job
     conn.execute('DELETE FROM application WHERE job_id = ?', (job_id,))
     conn.execute('DELETE FROM job WHERE id = ?', (job_id,))
@@ -738,7 +964,7 @@ def delete_job(job_id):
     recommendation_engine.update_job_vectors()
     
     flash('Job deleted successfully!')
-    return redirect(url_for('employer_dashboard'))
+    return redirect(url_for('recruiter_dashboard'))
 
 @app.route('/apply_job/<int:job_id>', methods=['POST'])
 def apply_job(job_id):
@@ -759,64 +985,162 @@ def apply_job(job_id):
     
     return jsonify({'success': True, 'message': 'Application submitted successfully!'})
 
-@app.route('/upload_resume', methods=['GET', 'POST'])
-def upload_resume():
-    """Route for employers to upload resume and get job suggestions"""
-    if 'employer_name' not in session:
-        return redirect(url_for('employer_login'))
+@app.route('/upload_user_resume', methods=['POST'])
+def upload_user_resume():
+    """Route for job seekers to upload/update their resume from dashboard"""
+    if 'user_id' not in session:
+        flash('Please login to upload resume.')
+        return redirect(url_for('login'))
     
-    if request.method == 'POST':
-        if 'resume' not in request.files:
-            flash('No file selected!')
-            return redirect(url_for('upload_resume'))
-        
-        file = request.files['resume']
-        if file.filename == '':
-            flash('No file selected!')
-            return redirect(url_for('upload_resume'))
-        
-        # Check file extension
-        allowed_extensions = {'pdf', 'docx', 'doc'}
-        file_ext = file.filename.rsplit('.', 1)[1].lower() if '.' in file.filename else ''
-        
-        if file_ext not in allowed_extensions:
-            flash('Invalid file type! Please upload PDF or DOCX files only.')
-            return redirect(url_for('upload_resume'))
-        
-        # Save file
-        filename = secure_filename(file.filename)
-        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S_')
-        filename = timestamp + filename
-        file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-        file.save(file_path)
-        
-        # Parse resume
-        parsed_data = resume_parser.parse_resume(file_path, file.filename)
-        
-        if not parsed_data:
-            flash('Error parsing resume. Please ensure the file is readable.')
-            os.remove(file_path)  # Clean up
-            return redirect(url_for('upload_resume'))
-        
-        # Get job recommendations based on parsed resume
-        recommendations = recommendation_engine.get_recommendations(
-            parsed_data['skills'], 
-            parsed_data['experience'],
-            top_n=10
-        )
-        
-        # Clean up uploaded file
+    if 'resume' not in request.files:
+        flash('No file selected!')
+        return redirect(url_for('dashboard'))
+    
+    file = request.files['resume']
+    if file.filename == '':
+        flash('No file selected!')
+        return redirect(url_for('dashboard'))
+    
+    # Check file extension
+    allowed_extensions = {'pdf', 'docx', 'doc'}
+    file_ext = file.filename.rsplit('.', 1)[1].lower() if '.' in file.filename else ''
+    
+    if file_ext not in allowed_extensions:
+        flash('Invalid file type! Please upload PDF, DOCX, or DOC files only.')
+        return redirect(url_for('dashboard'))
+    
+    # Get current user to check for existing resume
+    conn = get_db()
+    user_row = conn.execute('SELECT * FROM user WHERE id = ?', (session['user_id'],)).fetchone()
+    
+    # Delete old resume if exists
+    if user_row and user_row['resume_path']:
+        old_file_path = os.path.join(os.path.dirname(__file__), user_row['resume_path'])
         try:
-            os.remove(file_path)
+            if os.path.exists(old_file_path):
+                os.remove(old_file_path)
         except:
             pass
-        
-        return render_template('resume_suggestions.html', 
-                             parsed_data=parsed_data, 
-                             recommendations=recommendations,
-                             employer_name=session['employer_name'])
     
-    return render_template('upload_resume.html', employer_name=session['employer_name'])
+    # Save new file
+    filename = secure_filename(file.filename)
+    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S_')
+    filename = timestamp + filename
+    file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+    file.save(file_path)
+    resume_path = os.path.join('uploads', filename)
+    resume_uploaded_at = datetime.utcnow().isoformat()
+    
+    # Parse resume to extract skills
+    parsed_data = resume_parser.parse_resume(file_path, file.filename)
+    resume_skills = None
+    if parsed_data and parsed_data.get('skills'):
+        resume_skills = parsed_data['skills']
+    
+    # Update database with resume path and extracted skills
+    # First check if resume_skills column exists, if not we'll add it
+    try:
+        cols = [row[1] for row in conn.execute('PRAGMA table_info(user)').fetchall()]
+        if 'resume_skills' not in cols:
+            conn.execute('ALTER TABLE user ADD COLUMN resume_skills TEXT')
+            conn.commit()
+    except:
+        pass
+    
+    conn.execute(
+        'UPDATE user SET resume_path = ?, resume_uploaded_at = ?, resume_skills = ? WHERE id = ?',
+        (resume_path, resume_uploaded_at, resume_skills, session['user_id'])
+    )
+    conn.commit()
+    conn.close()
+    
+    if resume_skills:
+        flash(f'Resume uploaded successfully! Extracted {len(resume_skills.split(","))} skills from your resume.')
+    else:
+        flash('Resume uploaded successfully!')
+    return redirect(url_for('dashboard'))
+
+@app.route('/remove_resume', methods=['POST'])
+def remove_resume():
+    """Route to remove user's resume"""
+    if 'user_id' not in session:
+        flash('Please login to remove resume.')
+        return redirect(url_for('login'))
+    
+    conn = get_db()
+    user_row = conn.execute('SELECT * FROM user WHERE id = ?', (session['user_id'],)).fetchone()
+    
+    if not user_row:
+        conn.close()
+        flash('User not found')
+        return redirect(url_for('dashboard'))
+    
+    # Delete resume file if exists
+    if user_row['resume_path']:
+        resume_path = os.path.join(os.path.dirname(__file__), user_row['resume_path'])
+        try:
+            if os.path.exists(resume_path):
+                os.remove(resume_path)
+        except:
+            pass
+    
+    # Update database to remove resume
+    conn.execute(
+        'UPDATE user SET resume_path = NULL, resume_uploaded_at = NULL, resume_skills = NULL WHERE id = ?',
+        (session['user_id'],)
+    )
+    conn.commit()
+    conn.close()
+    
+    flash('Resume removed successfully! Your profile skills are still being used for job matching.')
+    return redirect(url_for('dashboard'))
+
+@app.route('/download_resume')
+def download_resume():
+    """Route to download user's resume (for job seekers) or applicant's resume (for recruiters)"""
+    user_id_param = request.args.get('user_id')
+    
+    # If user_id is provided, it's a recruiter downloading an applicant's resume
+    if user_id_param and 'recruiter_name' in session:
+        try:
+            applicant_id = int(user_id_param)
+            conn = get_db()
+            user_row = conn.execute('SELECT * FROM user WHERE id = ?', (applicant_id,)).fetchone()
+            conn.close()
+            
+            if not user_row or not user_row['resume_path']:
+                flash('No resume found for this applicant!')
+                return redirect(url_for('recruiter_dashboard'))
+            
+            resume_path = os.path.join(os.path.dirname(__file__), user_row['resume_path'])
+            if not os.path.exists(resume_path):
+                flash('Resume file not found!')
+                return redirect(url_for('recruiter_dashboard'))
+            
+            return send_file(resume_path, as_attachment=True, download_name=f"{user_row['full_name']}_resume.pdf")
+        except:
+            flash('Invalid request!')
+            return redirect(url_for('recruiter_dashboard'))
+    
+    # Otherwise, it's a job seeker downloading their own resume
+    if 'user_id' not in session:
+        flash('Please login to download resume.')
+        return redirect(url_for('login'))
+    
+    conn = get_db()
+    user_row = conn.execute('SELECT * FROM user WHERE id = ?', (session['user_id'],)).fetchone()
+    conn.close()
+    
+    if not user_row or not user_row['resume_path']:
+        flash('No resume found!')
+        return redirect(url_for('dashboard'))
+    
+    resume_path = os.path.join(os.path.dirname(__file__), user_row['resume_path'])
+    if not os.path.exists(resume_path):
+        flash('Resume file not found!')
+        return redirect(url_for('dashboard'))
+    
+    return send_file(resume_path, as_attachment=True)
 
 @app.route('/logout')
 def logout():
@@ -850,6 +1174,16 @@ def api_recommendations(user_id):
         })
     conn.close()
     return jsonify(result)
+
+@app.route('/api/job/<int:job_id>')
+def api_job_details(job_id):
+    """API endpoint to get job details"""
+    conn = get_db()
+    row = conn.execute('SELECT * FROM job WHERE id = ?', (job_id,)).fetchone()
+    conn.close()
+    if not row:
+        return jsonify({'error': 'Job not found'}), 404
+    return jsonify(dict(row))
 
 @app.route('/api/check_application/<int:job_id>')
 def check_application(job_id):

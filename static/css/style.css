@@ -68,13 +68,16 @@ h1, h2, h3, h4, h5, h6 {
     border: none;
     border-radius: 16px;
     box-shadow: var(--shadow-md);
-    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     background: white;
     overflow: hidden;
+    will-change: transform;
+    backface-visibility: hidden;
+    -webkit-backface-visibility: hidden;
 }
 
 .card:hover {
-    transform: translateY(-4px);
+    transform: translate3d(0, -4px, 0);
     box-shadow: var(--shadow-xl);
 }
 
@@ -106,29 +109,35 @@ h1, h2, h3, h4, h5, h6 {
 
 .navbar-nav .nav-link {
     font-weight: 500;
-    transition: all 0.3s ease;
+    transition: color 0.2s ease, background-color 0.2s ease, transform 0.2s ease;
     color: rgba(255, 255, 255, 0.9) !important;
     padding: 0.5rem 1rem !important;
     border-radius: 8px;
     margin: 0 0.25rem;
+    will-change: transform;
+    backface-visibility: hidden;
+    -webkit-backface-visibility: hidden;
 }
 
 .navbar-nav .nav-link:hover {
     color: white !important;
     background: rgba(255, 255, 255, 0.15);
-    transform: translateY(-1px);
+    transform: translate3d(0, -1px, 0);
 }
 
 /* Buttons */
 .btn {
     border-radius: 10px;
     font-weight: 600;
-    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.2s cubic-bezier(0.4, 0, 0.2, 1);
     padding: 0.625rem 1.25rem;
     letter-spacing: 0.3px;
     border: none;
     position: relative;
     overflow: hidden;
+    will-change: transform;
+    backface-visibility: hidden;
+    -webkit-backface-visibility: hidden;
 }
 
 .btn::before {
@@ -140,8 +149,9 @@ h1, h2, h3, h4, h5, h6 {
     height: 0;
     border-radius: 50%;
     background: rgba(255, 255, 255, 0.3);
-    transform: translate(-50%, -50%);
-    transition: width 0.6s, height 0.6s;
+    transform: translate3d(-50%, -50%, 0);
+    transition: width 0.4s ease, height 0.4s ease;
+    will-change: width, height;
 }
 
 .btn:hover::before {
@@ -150,12 +160,12 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 .btn:hover {
-    transform: translateY(-2px);
+    transform: translate3d(0, -2px, 0);
     box-shadow: var(--shadow-lg);
 }
 
 .btn:active {
-    transform: translateY(0);
+    transform: translate3d(0, 0, 0);
 }
 
 .btn-lg {
@@ -250,22 +260,28 @@ h1, h2, h3, h4, h5, h6 {
     height: 200%;
     background: radial-gradient(circle, rgba(16, 185, 129, 0.1) 0%, transparent 70%);
     animation: pulse 3s ease-in-out infinite;
+    will-change: transform, opacity;
+    backface-visibility: hidden;
+    -webkit-backface-visibility: hidden;
 }
 
 @keyframes pulse {
-    0%, 100% { transform: scale(1); opacity: 0.5; }
-    50% { transform: scale(1.1); opacity: 0.8; }
+    0%, 100% { transform: scale3d(1, 1, 1); opacity: 0.5; }
+    50% { transform: scale3d(1.1, 1.1, 1); opacity: 0.8; }
 }
 
 /* Job Cards */
 .job-card {
-    transition: all 0.3s ease;
+    transition: transform 0.3s ease, border-color 0.3s ease;
     border-left: 4px solid var(--primary-color);
+    will-change: transform;
+    backface-visibility: hidden;
+    -webkit-backface-visibility: hidden;
 }
 
 .job-card:hover {
     border-left-color: var(--success-color);
-    transform: translateX(5px);
+    transform: translate3d(5px, 0, 0);
 }
 
 /* Badges */
@@ -310,6 +326,9 @@ footer p {
 
 .fade-in-up {
     animation: fadeInUp 0.6s ease-out;
+    will-change: transform, opacity;
+    backface-visibility: hidden;
+    -webkit-backface-visibility: hidden;
 }
 
 /* Responsive Design */
